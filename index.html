@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inventário de Pacotes - SVC</title>
+  <style>
+    :root {
+      --amarelo: #FFE600;
+      --azul: #3483FA;
+      --verde: #00A650;
+      --vermelho: #E53935;
+      --cinza: #EEEEEE;
+      --texto: #333333;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, Roboto, Helvetica, Arial, sans-serif;
+      background: #f5f5f5;
+      color: var(--texto);
+      padding-bottom: 70px;
+    }
+    header {
+      background: var(--amarelo);
+      padding: 14px 16px;
+      font-weight: 700;
+      font-size: 18px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .config-warning {
+      background: #fff3cd;
+      color: #856404;
+      padding: 10px 16px;
+      font-size: 13px;
+      border-bottom: 1px solid #ffeeba;
+      display: none;
+    }
+    .tabs {
+      display: flex;
+      background: white;
+      border-bottom: 1px solid #ddd;
+      position: sticky;
+      top: 48px;
+      z-index: 10;
+      overflow-x: auto;
+    }
+    .tab {
+      flex: 1;
+      text-align: center;
+      padding: 12px 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #888;
+      cursor: pointer;
+      white-space: nowrap;
+      border-bottom: 3px solid transparent;
+    }
+    .tab.active {
+      color: var(--azul);
+      border-bottom: 3px solid var(--azul);
+    }
+    .screen { display: none; padding: 16px; max-width: 640px; margin: 0 auto; }
+    .screen.active { display: block; }
+
+    label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
+    select, input[type=text] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 15px;
+      background: white;
+    }
+    button {
+      border: none;
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-primary { background: var(--azul); color: white; width: 100%; margin-top: 10px; }
+    .btn-secondary { background: var(--cinza); color: var(--texto); }
+    .btn-danger { background: var(--vermelho); color: white; }
+    .btn-outline { background: white; color: var(--azul); border: 1px solid var(--azul); }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row > * { flex: 1; }
+
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 12px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    }
+
+    video { width: 100%; border-radius: 8px; background: #000; display: block; }
+    .cam-wrap { position: relative; margin-top: 10px; }
+    .cam-status {
+      position: absolute; bottom: 8px; left: 8px; right: 8px;
+      background: rgba(0,0,0,0.6); color: white; font-size: 12px;
+      padding: 6px 8px; border-radius: 6px; text-align: center;
+    }
+
+    .pending-list { list-style: none; padding: 0; margin: 10px 0 0; max-height: 240px; overflow-y: auto; }
+    .pending-list li {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 14px;
+    }
+    .pending-list li button { background: none; color: var(--vermelho); font-size: 13px; padding: 4px 8px; }
+    .count-badge {
+      display: inline-block; background: var(--azul); color: white;
+      border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 700;
+    }
+    .badge-devolucao { background: var(--vermelho); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: white; }
+    th, td { padding: 8px 6px; border-bottom: 1px solid #eee; text-align: left; }
+    th { background: #fafafa; position: sticky; top: 0; }
+    .tag { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; color: white; }
+    .tag-entrada { background: var(--verde); }
+    .tag-devolucao { background: var(--vermelho); }
+
+    .empty { color: #999; text-align: center; padding: 24px 0; font-size: 14px; }
+    .toast {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      background: #222; color: white; padding: 10px 18px; border-radius: 20px;
+      font-size: 14px; z-index: 100; opacity: 0; transition: opacity 0.3s;
+      max-width: 90%; text-align: center;
+    }
+    .toast.show { opacity: 1; }
+    .hint { font-size: 12px; color: #888; margin-top: 6px; }
+    .list-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid #eee;
+    }
+  </style>
+</head>
+<body>
+
+  <header>📦 Inventário de Pacotes - SVC</header>
+  <div class="config-warning" id="config-warning">
+    ⚠️ Configuração pendente: abra este arquivo num editor de texto e troque o valor de <code>APP_URL</code>
+    (no topo do &lt;script&gt;) pela URL do seu Apps Script (termina em <code>/exec</code>).
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-screen="bipagem">Bipar</div>
+    <div class="tab" data-screen="devolucao">Devolução</div>
+    <div class="tab" data-screen="svcs">SVCs</div>
+    <div class="tab" data-screen="historico">Histórico</div>
+  </div>
+
+  <!-- BIPAGEM -->
+  <div class="screen active" id="screen-bipagem">
+    <div class="card">
+      <label>SVC</label>
+      <select id="svc-select-bipagem"></select>
+
+      <label>Seu nome (opcional, fica salvo no histórico)</label>
+      <input type="text" id="usuario-bipagem" placeholder="Ex: João">
+
+      <div class="row" style="margin-top:14px;">
+        <button class="btn-primary" id="btn-start-cam-bipagem">📷 Ligar câmera e bipar</button>
+      </div>
+      <div class="cam-wrap" id="cam-wrap-bipagem" style="display:none;">
+        <video id="video-bipagem" autoplay playsinline muted></video>
+        <div class="cam-status" id="cam-status-bipagem">Aponte para o código de barras…</div>
+      </div>
+      <div class="hint" id="cam-support-bipagem"></div>
+
+      <label>Ou digite/bipe com leitor físico (aperte Enter)</label>
+      <input type="text" id="manual-input-bipagem" placeholder="Código do pacote">
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <span>Pacotes pendentes: <span class="count-badge" id="count-bipagem">0</span></span>
+        <button class="btn-secondary" id="btn-clear-bipagem">Limpar lista</button>
+      </div>
+      <ul class="pending-list" id="pending-bipagem"></ul>
+      <button class="btn-primary" id="btn-save-bipagem">Salvar pacotes bipados</button>
+    </div>
+  </div>
+
+  <!-- DEVOLUÇÃO -->
+  <div class="screen" id="screen-devolucao">
+    <div class="card">
+      <label>SVC</label>
+      <select id="svc-select-devolucao"></select>
+
+      <label>Seu nome (opcional)</label>
+      <input type="text" id="usuario-devolucao" placeholder="Ex: João">
+
+      <div class="row" style="margin-top:14px;">
+        <button class="btn-primary" id="btn-start-cam-devolucao">📷 Ligar câmera e bipar devolução</button>
+      </div>
+      <div class="cam-wrap" id="cam-wrap-devolucao" style="display:none;">
+        <video id="video-devolucao" autoplay playsinline muted></video>
+        <div class="cam-status" id="cam-status-devolucao">Aponte para o código de barras…</div>
+      </div>
+      <div class="hint" id="cam-support-devolucao"></div>
+
+      <label>Ou digite/bipe com leitor físico (aperte Enter)</label>
+      <input type="text" id="manual-input-devolucao" placeholder="Código do pacote">
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <span>Devoluções pendentes: <span class="count-badge badge-devolucao" id="count-devolucao">0</span></span>
+        <button class="btn-secondary" id="btn-clear-devolucao">Limpar lista</button>
+      </div>
+      <ul class="pending-list" id="pending-devolucao"></ul>
+      <button class="btn-primary" id="btn-save-devolucao" style="background:var(--vermelho);">Salvar devoluções</button>
+    </div>
+  </div>
+
+  <!-- SVCs -->
+  <div class="screen" id="screen-svcs">
+    <div class="card">
+      <label>Cadastrar novo SVC</label>
+      <div class="row">
+        <input type="text" id="novo-svc-nome" placeholder="Nome ou código do SVC">
+        <button class="btn-primary" style="margin-top:0;width:auto;" id="btn-add-svc">Adicionar</button>
+      </div>
+    </div>
+    <div class="card">
+      <label>SVCs cadastrados</label>
+      <div id="lista-svcs"><div class="empty">Carregando…</div></div>
+    </div>
+  </div>
+
+  <!-- HISTÓRICO -->
+  <div class="screen" id="screen-historico">
+    <div class="card">
+      <label>Filtrar por SVC</label>
+      <select id="filtro-svc"><option value="">Todos</option></select>
+      <label>Filtrar por tipo</label>
+      <select id="filtro-tipo">
+        <option value="">Todos</option>
+        <option value="ENTRADA">Entrada</option>
+        <option value="DEVOLUCAO">Devolução</option>
+      </select>
+      <label>Buscar código</label>
+      <input type="text" id="filtro-codigo" placeholder="Digite parte do código">
+      <button class="btn-primary" id="btn-filtrar-historico">Buscar</button>
+    </div>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr><th>Data/Hora</th><th>Código</th><th>SVC</th><th>Tipo</th><th>Usuário</th></tr>
+        </thead>
+        <tbody id="tbody-historico"><tr><td colspan="5" class="empty">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ======================================================================
+    // >>> TROQUE AQUI <<<
+    // Cole a URL do seu Apps Script implantado como "App da Web"
+    // (Implantar → Gerenciar implantações → copiar "URL do app da Web").
+    // Precisa terminar em /exec
+    // ======================================================================
+    var APP_URL = 'https://script.google.com/macros/s/AKfycbymbFlvXjUBfSY0-VLoj4elyNMWpkFsVO80eBN-q8U6-K0clippEzDywG4LO9-1iUng/exec';
+
+    if (!APP_URL || APP_URL.indexOf('COLE_AQUI') !== -1) {
+      document.getElementById('config-warning').style.display = 'block';
+    }
+
+    // ---------- API HELPERS ----------
+    function apiPost(action, payload) {
+      return fetch(APP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS
+        body: JSON.stringify({ action: action, payload: payload || {} })
+      }).then(function (r) { return r.json(); })
+        .catch(function (err) { return { ok: false, error: 'Falha de conexão: ' + err.message }; });
+    }
+    function apiGet(action, params) {
+      var url = new URL(APP_URL);
+      url.searchParams.set('action', action);
+      Object.keys(params || {}).forEach(function (k) {
+        if (params[k] !== undefined && params[k] !== null) url.searchParams.set(k, params[k]);
+      });
+      return fetch(url.toString()).then(function (r) { return r.json(); })
+        .catch(function (err) { return { ok: false, error: 'Falha de conexão: ' + err.message }; });
+    }
+
+    function toast(msg) {
+      var t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(function () { t.classList.remove('show'); }, 2500);
+    }
+
+    // ---------- TABS ----------
+    document.querySelectorAll('.tab').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
+        document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
+        tab.classList.add('active');
+        document.getElementById('screen-' + tab.dataset.screen).classList.add('active');
+        if (tab.dataset.screen === 'historico') carregarHistorico();
+        if (tab.dataset.screen === 'svcs') carregarSVCs();
+      });
+    });
+
+    // ---------- SVCs ----------
+    var svcsCache = [];
+
+    function carregarSVCs() {
+      apiGet('listSVCs').then(function (res) {
+        if (!res.ok) { toast('Erro ao carregar SVCs: ' + res.error); return; }
+        svcsCache = res.data;
+        preencherSelectsSVC();
+        renderListaSVCs();
+      });
+    }
+
+    function preencherSelectsSVC() {
+      ['svc-select-bipagem', 'svc-select-devolucao', 'filtro-svc'].forEach(function (id) {
+        var sel = document.getElementById(id);
+        var manterTodos = id === 'filtro-svc';
+        var atual = sel.value;
+        sel.innerHTML = manterTodos ? '<option value="">Todos</option>' : '';
+        svcsCache.forEach(function (svc) {
+          var opt = document.createElement('option');
+          opt.value = svc.nome;
+          opt.textContent = svc.nome;
+          sel.appendChild(opt);
+        });
+        if (atual) sel.value = atual;
+      });
+    }
+
+    function renderListaSVCs() {
+      var div = document.getElementById('lista-svcs');
+      if (!svcsCache.length) {
+        div.innerHTML = '<div class="empty">Nenhum SVC cadastrado ainda.</div>';
+        return;
+      }
+      div.innerHTML = '';
+      svcsCache.forEach(function (svc) {
+        var item = document.createElement('div');
+        item.className = 'list-item';
+        item.innerHTML = '<span>' + svc.nome + '</span>';
+        var btn = document.createElement('button');
+        btn.className = 'btn-danger';
+        btn.textContent = 'Remover';
+        btn.onclick = function () {
+          if (!confirm('Remover o SVC "' + svc.nome + '"?')) return;
+          apiPost('deleteSVC', { id: svc.id }).then(function (res) {
+            if (res.ok) { toast('SVC removido.'); carregarSVCs(); }
+            else toast('Erro: ' + res.error);
+          });
+        };
+        item.appendChild(btn);
+        div.appendChild(item);
+      });
+    }
+
+    document.getElementById('btn-add-svc').addEventListener('click', function () {
+      var input = document.getElementById('novo-svc-nome');
+      var nome = input.value.trim();
+      if (!nome) { toast('Digite um nome/código para o SVC.'); return; }
+      apiPost('addSVC', { nome: nome }).then(function (res) {
+        if (res.ok) { toast('SVC cadastrado.'); input.value = ''; carregarSVCs(); }
+        else toast('Erro: ' + res.error);
+      });
+    });
+
+    // ---------- BIPAGEM (genérica p/ bipagem e devolução) ----------
+    function criarControlador(tipo) {
+      var sufixo = tipo === 'DEVOLUCAO' ? 'devolucao' : 'bipagem';
+      var pendentes = [];
+      var jaAdicionados = {};
+      var stream = null;
+      var detectando = false;
+
+      var videoEl = document.getElementById('video-' + sufixo);
+      var camWrap = document.getElementById('cam-wrap-' + sufixo);
+      var camStatus = document.getElementById('cam-status-' + sufixo);
+      var camSupportEl = document.getElementById('cam-support-' + sufixo);
+      var btnStartCam = document.getElementById('btn-start-cam-' + sufixo);
+      var manualInput = document.getElementById('manual-input-' + sufixo);
+      var pendingListEl = document.getElementById('pending-' + sufixo);
+      var countEl = document.getElementById('count-' + sufixo);
+      var btnClear = document.getElementById('btn-clear-' + sufixo);
+      var btnSave = document.getElementById('btn-save-' + sufixo);
+      var svcSelect = document.getElementById('svc-select-' + sufixo);
+      var usuarioInput = document.getElementById('usuario-' + sufixo);
+
+      var barcodeDetectorSuportado = 'BarcodeDetector' in window;
+      if (!barcodeDetectorSuportado && camSupportEl) {
+        camSupportEl.textContent = 'Este navegador não suporta leitura de código pela câmera. Use Chrome no Android, ou digite/bipe manualmente abaixo.';
+      }
+
+      function adicionarCodigo(codigo) {
+        codigo = (codigo || '').trim();
+        if (!codigo) return;
+        if (jaAdicionados[codigo]) {
+          toast('Código já está na lista: ' + codigo);
+          return;
+        }
+        jaAdicionados[codigo] = true;
+        pendentes.push(codigo);
+        renderPendentes();
+        if (navigator.vibrate) navigator.vibrate(80);
+      }
+
+      function removerCodigo(codigo) {
+        pendentes = pendentes.filter(function (c) { return c !== codigo; });
+        delete jaAdicionados[codigo];
+        renderPendentes();
+      }
+
+      function renderPendentes() {
+        countEl.textContent = pendentes.length;
+        pendingListEl.innerHTML = '';
+        pendentes.slice().reverse().forEach(function (codigo) {
+          var li = document.createElement('li');
+          var span = document.createElement('span');
+          span.textContent = codigo;
+          var btn = document.createElement('button');
+          btn.textContent = 'remover';
+          btn.onclick = function () { removerCodigo(codigo); };
+          li.appendChild(span);
+          li.appendChild(btn);
+          pendingListEl.appendChild(li);
+        });
+      }
+
+      btnClear.addEventListener('click', function () {
+        if (!pendentes.length) return;
+        if (!confirm('Limpar todos os ' + pendentes.length + ' códigos pendentes?')) return;
+        pendentes = [];
+        jaAdicionados = {};
+        renderPendentes();
+      });
+
+      manualInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          adicionarCodigo(manualInput.value);
+          manualInput.value = '';
+        }
+      });
+
+      btnSave.addEventListener('click', function () {
+        var svc = svcSelect.value;
+        if (!svc) { toast('Selecione o SVC.'); return; }
+        if (!pendentes.length) { toast('Nenhum código para salvar.'); return; }
+        btnSave.disabled = true;
+        apiPost('addScans', {
+          svc: svc,
+          tipo: tipo,
+          usuario: usuarioInput.value.trim(),
+          codigos: pendentes
+        }).then(function (res) {
+          btnSave.disabled = false;
+          if (res.ok) {
+            toast(res.data.inserted + ' pacote(s) salvos com sucesso.');
+            pendentes = [];
+            jaAdicionados = {};
+            renderPendentes();
+          } else {
+            toast('Erro ao salvar: ' + res.error);
+          }
+        });
+      });
+
+      // ---------- CÂMERA ----------
+      var detector = null;
+      if (barcodeDetectorSuportado) {
+        try {
+          detector = new BarcodeDetector({
+            formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code']
+          });
+        } catch (err) {
+          barcodeDetectorSuportado = false;
+          if (camSupportEl) camSupportEl.textContent = 'Leitura automática indisponível neste navegador (' + err.message + '). Use digitação manual.';
+        }
+      }
+
+      btnStartCam.addEventListener('click', function () {
+        if (stream) {
+          pararCamera();
+          return;
+        }
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+          .then(function (s) {
+            stream = s;
+            videoEl.srcObject = stream;
+            camWrap.style.display = 'block';
+            btnStartCam.textContent = '⏹ Desligar câmera';
+            if (barcodeDetectorSuportado) {
+              detectando = true;
+              loopDeteccao();
+            } else {
+              camStatus.textContent = 'Câmera ligada, mas leitura automática indisponível neste navegador.';
+            }
+          })
+          .catch(function (err) {
+            toast('Não foi possível acessar a câmera: ' + err.message);
+          });
+      });
+
+      function pararCamera() {
+        detectando = false;
+        if (stream) {
+          stream.getTracks().forEach(function (t) { t.stop(); });
+          stream = null;
+        }
+        camWrap.style.display = 'none';
+        btnStartCam.textContent = '📷 Ligar câmera e bipar';
+      }
+
+      var ultimaLeitura = { codigo: null, hora: 0 };
+
+      function loopDeteccao() {
+        if (!detectando) return;
+        detector.detect(videoEl).then(function (codigos) {
+          if (codigos.length) {
+            var valor = codigos[0].rawValue;
+            var agora = Date.now();
+            if (valor !== ultimaLeitura.codigo || agora - ultimaLeitura.hora > 1500) {
+              ultimaLeitura = { codigo: valor, hora: agora };
+              adicionarCodigo(valor);
+              camStatus.textContent = 'Lido: ' + valor;
+            }
+          }
+        }).catch(function () {}).finally(function () {
+          if (detectando) setTimeout(loopDeteccao, 350);
+        });
+      }
+    }
+
+    // ---------- HISTÓRICO ----------
+    function carregarHistorico() {
+      var tbody = document.getElementById('tbody-historico');
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">Carregando…</td></tr>';
+      var payload = {
+        svc: document.getElementById('filtro-svc').value,
+        tipo: document.getElementById('filtro-tipo').value,
+        codigo: document.getElementById('filtro-codigo').value
+      };
+      apiGet('listHistorico', payload).then(function (res) {
+        if (!res.ok) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Erro: ' + res.error + '</td></tr>'; return; }
+        if (!res.data.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Nenhum registro encontrado.</td></tr>'; return; }
+        tbody.innerHTML = '';
+        res.data.forEach(function (r) {
+          var tr = document.createElement('tr');
+          var data = new Date(r.timestamp);
+          var dataFmt = isNaN(data.getTime()) ? r.timestamp : data.toLocaleString('pt-BR');
+          var tagClass = r.tipo === 'DEVOLUCAO' ? 'tag-devolucao' : 'tag-entrada';
+          var tagTexto = r.tipo === 'DEVOLUCAO' ? 'Devolução' : 'Entrada';
+          tr.innerHTML =
+            '<td>' + dataFmt + '</td>' +
+            '<td>' + r.codigo + '</td>' +
+            '<td>' + r.svc + '</td>' +
+            '<td><span class="tag ' + tagClass + '">' + tagTexto + '</span></td>' +
+            '<td>' + (r.usuario || '-') + '</td>';
+          tbody.appendChild(tr);
+        });
+      });
+    }
+
+    document.getElementById('btn-filtrar-historico').addEventListener('click', carregarHistorico);
+
+    // ---------- INIT ----------
+    // Cada bloco é isolado em try/catch: se um recurso (ex: câmera) falhar na
+    // configuração inicial, o resto do app (SVCs, histórico) continua funcionando.
+    try { criarControlador('ENTRADA'); } catch (err) { console.error('Erro ao iniciar bipagem:', err); }
+    try { criarControlador('DEVOLUCAO'); } catch (err) { console.error('Erro ao iniciar devolução:', err); }
+    try { carregarSVCs(); } catch (err) { console.error('Erro ao carregar SVCs:', err); }
+  </script>
+</body>
+</html>
