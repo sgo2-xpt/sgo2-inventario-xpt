@@ -260,6 +260,7 @@
 
   <div class="toast" id="toast"></div>
 
+  <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script>
     // ======================================================================
     // >>> TROQUE AQUI <<<
@@ -380,8 +381,6 @@
       var sufixo = tipo === 'DEVOLUCAO' ? 'devolucao' : 'bipagem';
       var pendentes = [];
       var jaAdicionados = {};
-      var stream = null;
-      var detectando = false;
 
       var videoEl = document.getElementById('video-' + sufixo);
       var camWrap = document.getElementById('cam-wrap-' + sufixo);
@@ -396,9 +395,9 @@
       var svcSelect = document.getElementById('svc-select-' + sufixo);
       var usuarioInput = document.getElementById('usuario-' + sufixo);
 
-      var barcodeDetectorSuportado = 'BarcodeDetector' in window;
-      if (!barcodeDetectorSuportado && camSupportEl) {
-        camSupportEl.textContent = 'Este navegador não suporta leitura de código pela câmera. Use Chrome no Android, ou digite/bipe manualmente abaixo.';
+      var cameraSuportada = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+      if (!cameraSuportada && camSupportEl) {
+        camSupportEl.textContent = 'Este navegador não suporta acesso à câmera. Use um leitor físico ou digite o código manualmente abaixo.';
       }
 
       function adicionarCodigo(codigo) {
@@ -476,68 +475,54 @@
       });
 
       // ---------- CÂMERA ----------
-      var detector = null;
-      if (barcodeDetectorSuportado) {
-        try {
-          detector = new BarcodeDetector({
-            formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code']
-          });
-        } catch (err) {
-          barcodeDetectorSuportado = false;
-          if (camSupportEl) camSupportEl.textContent = 'Leitura automática indisponível neste navegador (' + err.message + '). Use digitação manual.';
-        }
+      // Usa a biblioteca ZXing (decodifica no próprio JavaScript) em vez da API nativa
+      // BarcodeDetector, que não existe em boa parte dos celulares Android/Chrome.
+      // Assim a leitura funciona de forma confiável em qualquer navegador com câmera.
+      var codeReader = (typeof ZXing !== 'undefined') ? new ZXing.BrowserMultiFormatReader() : null;
+      var camLigada = false;
+      var ultimaLeitura = { codigo: null, hora: 0 };
+
+      if (!codeReader && camSupportEl) {
+        camSupportEl.textContent = 'Não foi possível carregar o leitor de código. Use digitação manual ou leitor físico abaixo.';
       }
 
       btnStartCam.addEventListener('click', function () {
-        if (stream) {
+        if (!codeReader) { toast('Leitor de código indisponível neste navegador.'); return; }
+        if (camLigada) {
           pararCamera();
           return;
         }
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-          .then(function (s) {
-            stream = s;
-            videoEl.srcObject = stream;
-            camWrap.style.display = 'block';
-            btnStartCam.textContent = '⏹ Desligar câmera';
-            if (barcodeDetectorSuportado) {
-              detectando = true;
-              loopDeteccao();
-            } else {
-              camStatus.textContent = 'Câmera ligada, mas leitura automática indisponível neste navegador.';
+        camWrap.style.display = 'block';
+        camStatus.textContent = 'Aponte para o código de barras…';
+        btnStartCam.textContent = '⏹ Desligar câmera';
+        camLigada = true;
+        codeReader.decodeFromConstraints(
+          { video: { facingMode: { ideal: 'environment' } } },
+          videoEl,
+          function (result) {
+            if (result) {
+              var valor = result.getText();
+              var agora = Date.now();
+              if (valor !== ultimaLeitura.codigo || agora - ultimaLeitura.hora > 1500) {
+                ultimaLeitura = { codigo: valor, hora: agora };
+                adicionarCodigo(valor);
+                camStatus.textContent = 'Lido: ' + valor;
+              }
             }
-          })
-          .catch(function (err) {
-            toast('Não foi possível acessar a câmera: ' + err.message);
-          });
+          }
+        ).catch(function (err) {
+          camLigada = false;
+          camWrap.style.display = 'none';
+          btnStartCam.textContent = '📷 Ligar câmera e bipar';
+          toast('Não foi possível acessar a câmera: ' + err.message);
+        });
       });
 
       function pararCamera() {
-        detectando = false;
-        if (stream) {
-          stream.getTracks().forEach(function (t) { t.stop(); });
-          stream = null;
-        }
+        camLigada = false;
+        if (codeReader) codeReader.reset();
         camWrap.style.display = 'none';
         btnStartCam.textContent = '📷 Ligar câmera e bipar';
-      }
-
-      var ultimaLeitura = { codigo: null, hora: 0 };
-
-      function loopDeteccao() {
-        if (!detectando) return;
-        detector.detect(videoEl).then(function (codigos) {
-          if (codigos.length) {
-            var valor = codigos[0].rawValue;
-            var agora = Date.now();
-            if (valor !== ultimaLeitura.codigo || agora - ultimaLeitura.hora > 1500) {
-              ultimaLeitura = { codigo: valor, hora: agora };
-              adicionarCodigo(valor);
-              camStatus.textContent = 'Lido: ' + valor;
-            }
-          }
-        }).catch(function () {}).finally(function () {
-          if (detectando) setTimeout(loopDeteccao, 350);
-        });
       }
     }
 
